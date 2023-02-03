@@ -124,7 +124,7 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
 }
 
 float eps = 1e-8;
-int problem_size[5] = {0,256, 512, 1024, 2048};
+int problem_size[5] = {0,4, 512, 1024, 2048};
 int repeats = 5;
 
 int main() {
@@ -138,6 +138,13 @@ int main() {
             std::ifstream ifs(input_name, std::ios::binary | std::ios::in);
             ifs.read((char *)B, sizeof(float) * p_size * p_size);
             ifs.close();
+
+            if(i == 1){
+                for(int k = 0; k < 4; k ++){
+                    printf("%f ",b[k]);
+                }
+                printf("\n");
+            }
 
             int size = p_size * p_size;
             float *r, *b, *x, *p, *Ap, *Ax;
