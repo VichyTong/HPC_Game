@@ -80,8 +80,8 @@ __global__ void deviceReduceKernelStep2(int n, float *p, float *output) {
 float reduce(int n, float *p, float *q){
     int blocks = std::min((n * n + BLOCK_SIZE - 1)/ BLOCK_SIZE, 1024);
     auto output = new float[1024];
-    deviceReduceKernelStep1<<<blocks, BLOCK_SIZE>>>(n, p, q, output);
-    deviceReduceKernelStep2<<<1, 1024>>>(n, output, output);
+    deviceReduceKernelStep1<<<blocks, BLOCK_SIZE>>>(n * n, p, q, output);
+    deviceReduceKernelStep2<<<1, 1024>>>(n * n, output, output);
     return output[0];
 }
 
@@ -144,7 +144,7 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
 
         cudaDeviceSynchronize();
 
-        float pAp = reduce(n, p, p);
+        float pAp = reduce(n, p, Ap);
         alpha = old_rTr / pAp;
         update_x<<<(n * n + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(n, x, p, alpha);
 
