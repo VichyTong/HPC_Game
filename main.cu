@@ -69,11 +69,10 @@ __global__ void check_solution(int n, float *Ax, const float *x, const float *b,
 #define b(i, j) b[(i) * n + (j)]
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
-    *residual = 0.0;
     if(i <= 0 || j <= 0 || i > n || j > n){
         Ax(i, j) = 0.f;
     }
-    Ax(i, j) = 4,0 * x(i, j) - x(i - 1, j) - x(i + 1, j) - x(i, j - 1) - x(i, j + 1);
+    Ax(i, j) = 4.0 * x(i, j) - x(i - 1, j) - x(i + 1, j) - x(i, j - 1) - x(i, j + 1);
     *residual += (b(i, j) - Ax(i, j)) * (b(i, j) - Ax(i, j));
 #undef Ax
 #undef x
@@ -83,27 +82,29 @@ __global__ void check_solution(int n, float *Ax, const float *x, const float *b,
 float B[2048 * 2048];
 float X[2048 * 2048];
 
-#define BLOCK_SIZE 32
+#define BLOCK_SIZE 16
 void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap, float *Ax){
     int size = n * n;
     float alpha = 0.f, beta = 0.f;
     float initial_rTr = 0.f;
     reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &initial_rTr);
+    printf(">>> Initial residual = %f\n", initial_rTr);
     float old_rTr = initial_rTr;
     update_p<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, beta);
 
     for(int i = 0; i < size; i ++){
         dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
-        dim3 dimGrid(n / BLOCK_SIZE, n / BLOCK_SIZE);
+        dim3 dimGrid((n + BLOCK_SIZE - 1) / BLOCK_SIZE, (n + BLOCK_SIZE - 1) / BLOCK_SIZE);
         compute_Ap<<< dimGrid, dimBlock >>>(n, p, Ap);
         float pAp = 0.f;
-        reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &pAp);
+        reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, p, Ap, &pAp);
         alpha = old_rTr / pAp;
         update_x<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, x, p, alpha);
         update_r<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, alpha);
         float new_rTr = 0.f;
         reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &new_rTr);
         if (sqrt(new_rTr) < eps){
+            printf(">>> Conjugate Gradient method converged at time %d.\n", i);
             break;
         }
         beta = new_rTr / old_rTr;
@@ -114,10 +115,10 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
     float residual_cg = 0.f;
 
     dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 dimGrid(n / BLOCK_SIZE, n / BLOCK_SIZE);
+    dim3 dimGrid((n + BLOCK_SIZE - 1) / BLOCK_SIZE, (n + BLOCK_SIZE - 1) / BLOCK_SIZE);
     check_solution<<<dimGrid, dimBlock >>>(n, Ax, x, b, &residual_cg);
     printf(">>> Checking the residual norm(Ax-b)...\n");
-    printf(">>> Residual CGPoissonSolver: %f\n",residual_cg);
+    printf(">>> Residual CGPoissonSolver: %f\n",sqrt(residual_cg));
     assert(residual_cg < eps);
 
     cudaMemcpy(X, x, size * sizeof(float), cudaMemcpyDeviceToHost);
@@ -141,7 +142,7 @@ int main() {
 
             if(i == 1){
                 for(int k = 0; k < 4; k ++){
-                    printf("%f ",b[k]);
+                    printf("%f ",B[k]);
                 }
                 printf("\n");
             }
