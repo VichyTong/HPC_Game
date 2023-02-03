@@ -3,7 +3,7 @@
 #include <random>
 
 using namespace std;
-int problem_size[5] = {0, 4, 512, 1024, 2048};
+int problem_size[5] = {0, 256, 512, 1024, 2048};
 float b[2048 * 2048];
 
 void randomize(const int size, float *mat){

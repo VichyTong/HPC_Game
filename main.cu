@@ -7,6 +7,8 @@
 #include <assert.h>
 #include <cstdio>
 
+#define BLOCK_SIZE 64
+
 #define ADD_TIME(code) do { \
     auto start = std::chrono::system_clock::now(); \
     code \
@@ -20,7 +22,7 @@ __global__ void compute_Ap(int n, const float *p, float *Ap){
 #define p(i, j) p[(i) * n + j]
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
-    if (i <= 0 || j <= 0 || i > n || j > n){
+    if (i >= n || j >= n){
         Ap(i, j) = 0.f;
         return;
     }
@@ -29,14 +31,58 @@ __global__ void compute_Ap(int n, const float *p, float *Ap){
 #undef p
 }
 
-__global__ void reduce(int n, const float *p, const float *q, float *result){
+__device__ float warpReduceSum(float val) {
+    for (int offset = warpSize >> 1; offset > 0; offset >>= 1){
+        val += __shfl_down(val, offset);
+    }
+    return val;
+}
+
+__device__ float blockReduceSum(float val) {
+    static __shared__ int shared[32];
+    int lane = threadIdx.x % warpSize;
+    int wid = threadIdx.x / warpSize;
+    val = warpReduceSum(val);
+    if (lane == 0) {
+        shared[wid] = val;
+    }
+    __syncthreads();
+    val = (threadIdx.x < blockDim.x / warpSize) ? shared[lane] : 0;
+    if (wid == 0) {
+        val = warpReduceSum(val);
+    }
+    return val;
+}
+
+__global__ void deviceReduceKernelStep1(int n, float *p, float *q, float *output) {
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
-    float res = 0.f;
-    for(int i = index; i < n; i += stride){
-        res += p[i] * q[i];
+    float sum = 0;
+    for (int i = index; i < n; i += stride) {
+        sum += p[i] * q[i];
     }
-    *result += res;
+    sum = blockReduceSum(sum);
+    if (threadIdx.x==0)
+        output[blockIdx.x]=sum;
+}
+__global__ void deviceReduceKernelStep2(int n, float *p, float *output) {
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x;
+    float sum = 0;
+    for (int i = index; i < n; i += stride) {
+        sum += p[i];
+    }
+    sum = blockReduceSum(sum);
+    if (threadIdx.x==0)
+        output[blockIdx.x]=sum;
+}
+
+float reduce(int n, float *p, float *q){
+    int blocks = std::min((n + BLOCK_SIZE - 1)/ BLOCK_SIZE, 1024);
+    auto output = new float[1024];
+    deviceReduceKernelStep1<<<blocks, BLOCK_SIZE>>>(n, p, q, output);
+    deviceReduceKernelStep2<<<1, 1024>>>(n, output, output);
+    return output[0];
 }
 
 __global__ void update_x(int n, float *x, const float *p, const float alpha){
@@ -69,7 +115,7 @@ __global__ void check_solution(int n, float *Ax, const float *x, const float *b,
 #define b(i, j) b[(i) * n + (j)]
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
-    if(i <= 0 || j <= 0 || i > n || j > n){
+    if(i >= n || j >= n){
         Ax(i, j) = 0.f;
     }
     Ax(i, j) = 4.0 * x(i, j) - x(i - 1, j) - x(i + 1, j) - x(i, j - 1) - x(i, j + 1);
@@ -82,12 +128,10 @@ __global__ void check_solution(int n, float *Ax, const float *x, const float *b,
 float B[2048 * 2048];
 float X[2048 * 2048];
 
-#define BLOCK_SIZE 16
 void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap, float *Ax){
     int size = n * n;
     float alpha = 0.f, beta = 0.f;
-    float initial_rTr = 0.f;
-    reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &initial_rTr);
+    float initial_rTr = reduce(n, r, r);
     printf(">>> Initial residual = %f\n", initial_rTr);
     float old_rTr = initial_rTr;
     update_p<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, beta);
@@ -99,11 +143,7 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
 
         cudaDeviceSynchronize();
 
-        float pAp = 0.f;
-        reduce<<<(n * n + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(n, p, Ap, &pAp);
-
-        cudaDeviceSynchronize();
-
+        float pAp = reduce(n, p, p);
         alpha = old_rTr / pAp;
         update_x<<<(n * n + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(n, x, p, alpha);
 
@@ -113,10 +153,7 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
 
         cudaDeviceSynchronize();
 
-        float new_rTr = 0.f;
-        reduce<<<(n * n + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &new_rTr);
-
-        cudaDeviceSynchronize();
+        float new_rTr = reduce(n, r, r);
 
         if (sqrt(new_rTr) < eps){
             printf(">>> Conjugate Gradient method converged at time %d.\n", i);
@@ -143,7 +180,7 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
 }
 
 float eps = 1e-8;
-int problem_size[5] = {0,4, 512, 1024, 2048};
+int problem_size[5] = {0,256, 512, 1024, 2048};
 int repeats = 5;
 
 int main() {
@@ -197,6 +234,6 @@ int main() {
             ofs.write((const char*)X, sizeof(float) * p_size * p_size);
             ofs.close();
         }
-        printf("*** Average kernel time: %lf} msec\n",time / 5000.0);
+        printf("*** Average kernel time: %lf ms\n",time / 5000.0);
     }
 }
