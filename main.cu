@@ -3,6 +3,7 @@
 #include <random>
 #include <string>
 #include <fstream>
+#include <cmath>
 
 #define PRINT_TIME(code) do { \
     auto start = std::chrono::system_clock::now(); \
@@ -12,7 +13,9 @@
     std::cout << "time spent: " << double(duration.count()) << "us" << std::endl; \
 } while(0)
 
-__global__ compute_Ap(int n, const float *p, float *Ap){
+__global__ void compute_Ap(int n, const float *p, float *Ap){
+#define Ap(i, j) Ap[(i) * n + j]
+#define p(i, j) p[(i) * n + j]
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     if (i <= 0 || j <= 0 || i > n || j > n){
@@ -30,9 +33,11 @@ __global__ void reduce(int n, const float *p, const float *q, float *result){
         res += p[i] * q[i];
     }
     *result += res;
+#undef Ap
+#undef p
 }
 
-__global__ void update_x(int n, const float *x, const float *p, const float alpha){
+__global__ void update_x(int n, float *x, const float *p, const float alpha){
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
     for(int i = index; i < n; i += stride){
@@ -40,7 +45,7 @@ __global__ void update_x(int n, const float *x, const float *p, const float alph
     }
 }
 
-__global__ void update_r(int n, const float *r, const float *p, const float alpha){
+__global__ void update_r(int n, float *r, const float *p, const float alpha){
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
     for(int i = index; i < n; i += stride){
@@ -48,7 +53,7 @@ __global__ void update_r(int n, const float *r, const float *p, const float alph
     }
 }
 
-__global__ void update_p(int n, const float *r, const float *p, const float beta){
+__global__ void update_p(int n, const float *r, float *p, const float beta){
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
     for(int i = index; i < n; i += stride){
@@ -65,32 +70,32 @@ void cgSolver(int n, float eps){
 
     float *r, *b, *x, *p, *Ap, *Ax;
     float alpha, beta;
-    cudaMalloc(*r, size * sizeof(float));
-    cudaMalloc(*b, size * sizeof(float) );
-    cudaMalloc(*x, size * sizeof(float));
-    cudaMalloc(*p, size * sizeof(float));
-    cudaMalloc(*Ap, size * sizeof(float));
-    cudaMalloc(*Ax, size * sizeof(float));
+    cudaMalloc(&r, size * sizeof(float));
+    cudaMalloc(&b, size * sizeof(float));
+    cudaMalloc(&x, size * sizeof(float));
+    cudaMalloc(&p, size * sizeof(float));
+    cudaMalloc(&Ap, size * sizeof(float));
+    cudaMalloc(&Ax, size * sizeof(float));
 
     cudaMemcpy(b, B, size * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(r, B, size * sizeof(float), cudaMemcpyHostToDevice);
 
     float initial_rTr = 0.f;
-    reduce<<<n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &initial_rTr);
+    reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &initial_rTr);
     float old_rTr = initial_rTr;
-    update_p<<<n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, beta);
+    update_p<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, beta);
 
     for(int i = 0; i < size; i ++){
         dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
         dim3 dimGrid(n / BLOCK_SIZE, n / BLOCK_SIZE);
         compute_Ap<<< dimGrid, dimBlock >>>(n, p, ap);
         float pAp = 0.f;
-        reduce<<<n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &pAp);
+        reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &pAp);
         alpha = old_rTr / pAp;
-        update_x<<<n / BLOCK_SIZE, BLOCK_SIZE>>>(n, x, p, alpha);
-        update_r<<<n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, alpha);
+        update_x<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, x, p, alpha);
+        update_r<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, alpha);
         float new_rTr = 0.f;
-        reduce<<<n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &new_rTr);
+        reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &new_rTr);
         if (sqrt(new_rTr) < eps){
             break;
         }
@@ -123,7 +128,7 @@ int main() {
             ifs.close();
             PRINT_TIME(
                     cgSolver(p_size, eps);
-                    )
+                    );
             std::string output_name = "ans_" + std::to_string(i) + "_" + std::to_string(p_size) + "_" + std::to_string(j) + '.bin';
             std::ofstream ofs(output_name, std::ios::binary | std::ios::out);
             ofs.write((const char*)X, sizeof(float) * p_size * p_size);
