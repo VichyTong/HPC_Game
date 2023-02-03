@@ -62,8 +62,8 @@ __global__ void deviceReduceKernelStep1(int n, float *p, float *q, float *output
         sum += p[i] * q[i];
     }
     sum = blockReduceSum(sum);
-    if (threadIdx.x==0)
-        output[blockIdx.x]=sum;
+    if (threadIdx.x == 0)
+        output[blockIdx.x] = sum;
 }
 __global__ void deviceReduceKernelStep2(int n, float *p, float *output) {
     int index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -73,12 +73,12 @@ __global__ void deviceReduceKernelStep2(int n, float *p, float *output) {
         sum += p[i];
     }
     sum = blockReduceSum(sum);
-    if (threadIdx.x==0)
-        output[blockIdx.x]=sum;
+    if (threadIdx.x == 0)
+        output[blockIdx.x] = sum;
 }
 
 float reduce(int n, float *p, float *q){
-    int blocks = std::min((n + BLOCK_SIZE - 1)/ BLOCK_SIZE, 1024);
+    int blocks = std::min((n * n + BLOCK_SIZE - 1)/ BLOCK_SIZE, 1024);
     auto output = new float[1024];
     deviceReduceKernelStep1<<<blocks, BLOCK_SIZE>>>(n, p, q, output);
     deviceReduceKernelStep2<<<1, 1024>>>(n, output, output);
@@ -135,6 +135,7 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
     printf(">>> Initial residual = %f\n", initial_rTr);
     float old_rTr = initial_rTr;
     update_p<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, beta);
+
 
     for(int i = 0; i < size; i ++){
         dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
@@ -194,13 +195,6 @@ int main() {
             std::ifstream ifs(input_name, std::ios::binary | std::ios::in);
             ifs.read((char *)B, sizeof(float) * p_size * p_size);
             ifs.close();
-
-            if(i == 1){
-                for(int k = 0; k < 4 * 4; k ++){
-                    printf("%f ",B[k]);
-                }
-                printf("\n");
-            }
 
             int size = p_size * p_size;
             float *r, *b, *x, *p, *Ap, *Ax;
