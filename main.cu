@@ -69,7 +69,7 @@ void cgSolver(int n, float eps){
     int size = n * n;
 
     float *r, *b, *x, *p, *Ap, *Ax;
-    float alpha, beta;
+    float alpha = 0.f, beta = 0.f;
     cudaMalloc(&r, size * sizeof(float));
     cudaMalloc(&b, size * sizeof(float));
     cudaMalloc(&x, size * sizeof(float));
