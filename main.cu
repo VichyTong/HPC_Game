@@ -19,7 +19,7 @@ __global__ void compute_Ap(int n, const float *p, float *Ap){
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     if (i <= 0 || j <= 0 || i > n || j > n){
-        Ap[i][j] = 0.f;
+        Ap(i, j) = 0.f;
         return;
     }
     Ap(i, j) = 4.0 * p(i, j) - p(i - 1,j) - p(i + 1, j) - p(i, j - 1) - p(i, j + 1);
