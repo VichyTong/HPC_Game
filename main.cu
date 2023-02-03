@@ -138,7 +138,7 @@ int main() {
             ifs.read((char *)B, sizeof(float) * p_size * p_size);
             ifs.close();
 
-            int size = n * n;
+            int size = p_size * p_size;
             float *r, *b, *x, *p, *Ap, *Ax;
             cudaMalloc(&r, size * sizeof(float));
             cudaMalloc(&b, size * sizeof(float));
@@ -150,7 +150,7 @@ int main() {
             cudaMemcpy(r, B, size * sizeof(float), cudaMemcpyHostToDevice);
 
             ADD_TIME(
-                    cgSolver(p_size, eps, r, b, x, p, Ap, Ax, &alpha, &beta);
+                    cgSolver(p_size, eps, r, b, x, p, Ap, Ax);
                     );
 
             cudaFree(r);
