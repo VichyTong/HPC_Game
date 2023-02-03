@@ -132,7 +132,7 @@ int main() {
         printf("\n>>> Current problem size: %d x %d\n", problem_size[i], problem_size[i]);
         double time = 0.0;
         for(int j = 1; j <= 5; j ++){
-            printf(">>> Solving Poisson\'s equation using CG [%d/%d]\n", j + 1, 5);
+            printf(">>> Solving Poisson\'s equation using CG [%d/%d]\n", j, 5);
             int p_size = problem_size[i];
             std::string input_name = "b_" + std::to_string(i) + "_" + std::to_string(p_size) + "_" + std::to_string(j) + ".bin";
             std::ifstream ifs(input_name, std::ios::binary | std::ios::in);
@@ -147,6 +147,11 @@ int main() {
             cudaMalloc(&p, size * sizeof(float));
             cudaMalloc(&Ap, size * sizeof(float));
             cudaMalloc(&Ax, size * sizeof(float));
+            cudaMemset(&x, 0, size * sizeof(float));
+            cudaMemset(&p, 0, size * sizeof(float));
+            cudaMemset(&Ap, 0, size * sizeof(float));
+            cudaMemset(&Ax, 0, size * sizeof(float));
+
             cudaMemcpy(b, B, size * sizeof(float), cudaMemcpyHostToDevice);
             cudaMemcpy(r, B, size * sizeof(float), cudaMemcpyHostToDevice);
 

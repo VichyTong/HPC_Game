@@ -10,3 +10,4 @@ cgsolver: main.cu
 .PHONY: clean
 clean:
 	rm ./cgsolver
+	rm ./init

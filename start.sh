@@ -4,3 +4,5 @@ make init
 ./init
 make cgsolver
 ./cgsolver
+
+make clean
