@@ -85,6 +85,7 @@ float X[2048 * 2048];
 
 #define BLOCK_SIZE 32
 void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap, float *Ax){
+    int size = n * n;
     float alpha = 0.f, beta = 0.f;
     float initial_rTr = 0.f;
     reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &initial_rTr);
