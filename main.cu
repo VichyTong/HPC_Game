@@ -4,13 +4,15 @@
 #include <string>
 #include <fstream>
 #include <cmath>
+#include <assert.h>
+#include <cstdio>
 
-#define PRINT_TIME(code) do { \
+#define ADD_TIME(code) do { \
     auto start = std::chrono::system_clock::now(); \
     code \
     auto end   = std::chrono::system_clock::now(); \
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start); \
-    std::cout << "time spent: " << double(duration.count()) << "us" << std::endl; \
+    time += double(duration.count());\
 } while(0)
 
 __global__ void compute_Ap(int n, const float *p, float *Ap){
@@ -61,6 +63,23 @@ __global__ void update_p(int n, const float *r, float *p, const float beta){
     }
 }
 
+__global__ void check_solution(int n, float *Ax, const float *x, const float *b, float *residual){
+#define Ax(i, j) Ax[(i) * n + (j)]
+#define x(i, j) x[(i) * n + (j)]
+#define b(i, j) b[(i) * n + (j)]
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    *residual = 0.0;
+    if(i <= 0 || j <= 0 || i > n || j > n){
+        Ax(i, j) = 0.f;
+    }
+    Ax(i, j) = 4,0 * x(i, j) - x(i - 1, j) - x(i + 1, j) - x(i, j - 1) - x(i, j + 1);
+    *residual += (b(i, j) - Ax(i, j)) * (b(i, j) - Ax(i, j));
+#undef Ax
+#undef x
+#undef b
+}
+
 float B[2048 * 2048];
 float X[2048 * 2048];
 
@@ -80,30 +99,44 @@ void cgSolver(int n, float eps){
     cudaMemcpy(b, B, size * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(r, B, size * sizeof(float), cudaMemcpyHostToDevice);
 
-    float initial_rTr = 0.f;
-    reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &initial_rTr);
-    float old_rTr = initial_rTr;
-    update_p<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, beta);
+    double time = 0.0;
 
-    for(int i = 0; i < size; i ++){
-        dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
-        dim3 dimGrid(n / BLOCK_SIZE, n / BLOCK_SIZE);
-        compute_Ap<<< dimGrid, dimBlock >>>(n, p, Ap);
-        float pAp = 0.f;
-        reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &pAp);
-        alpha = old_rTr / pAp;
-        update_x<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, x, p, alpha);
-        update_r<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, alpha);
-        float new_rTr = 0.f;
-        reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &new_rTr);
-        if (sqrt(new_rTr) < eps){
-            break;
-        }
-        beta = new_rTr / old_rTr;
-        update_p<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, beta);
-        old_rTr = new_rTr;
-    }
+    ADD_TIME(
+            float initial_rTr = 0.f;
+            reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &initial_rTr);
+            float old_rTr = initial_rTr;
+            update_p<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, beta);
 
+            for(int i = 0; i < size; i ++){
+                dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
+                dim3 dimGrid(n / BLOCK_SIZE, n / BLOCK_SIZE);
+                compute_Ap<<< dimGrid, dimBlock >>>(n, p, Ap);
+                float pAp = 0.f;
+                reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &pAp);
+                alpha = old_rTr / pAp;
+                update_x<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, x, p, alpha);
+                update_r<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, alpha);
+                float new_rTr = 0.f;
+                reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &new_rTr);
+                if (sqrt(new_rTr) < eps){
+                    break;
+                }
+                beta = new_rTr / old_rTr;
+                update_p<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, beta);
+                old_rTr = new_rTr;
+            }
+
+            float residual_cg = 0.f;
+
+            dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
+            dim3 dimGrid(n / BLOCK_SIZE, n / BLOCK_SIZE);
+            check_solution<<<dimGrid, dimBlock >>>(n, Ax, x, b, &residual_cg);
+            printf(">>> Checking the residual norm(Ax-b)...\n");
+            printf(">>> Residual CGPoissonSolver: %f\n",residual_cg);
+            assert(residual_cg < eps);
+            );
+
+    printf("*** Average kernel time: %lf} msec\n",time / 5000.0);
     cudaMemcpy(X, x, size * sizeof(float), cudaMemcpyDeviceToHost);
 
     cudaFree(r);
@@ -120,15 +153,15 @@ int repeats = 5;
 
 int main() {
     for(int i = 1; i <= 4; i ++){
+        printf("\n>>> Current problem size: %d x %d\n", problem_size[i], problem_size[i]);
         for(int j = 1; j <= 5; j ++){
+            printf(">>> Solving Poisson\'s equation using CG [%d/%d]\n", j + 1, 5);
             int p_size = problem_size[i];
             std::string input_name = "b_" + std::to_string(i) + "_" + std::to_string(p_size) + "_" + std::to_string(j) + ".bin";
             std::ifstream ifs(input_name, std::ios::binary | std::ios::in);
             ifs.read((char *)B, sizeof(float) * p_size * p_size);
             ifs.close();
-            PRINT_TIME(
-                    cgSolver(p_size, eps);
-                    );
+            cgSolver(p_size, eps);
             std::string output_name = "ans_" + std::to_string(i) + "_" + std::to_string(p_size) + "_" + std::to_string(j) + ".bin";
             std::ofstream ofs(output_name, std::ios::binary | std::ios::out);
             ofs.write((const char*)X, sizeof(float) * p_size * p_size);
