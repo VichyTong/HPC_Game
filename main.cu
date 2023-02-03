@@ -139,7 +139,7 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
     float initial_rTr = reduce(n, r, r);
     printf(">>> Initial residual = %f\n", initial_rTr);
     float old_rTr = initial_rTr;
-    update_p<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, beta);
+    update_p<<<size / BLOCK_SIZE, BLOCK_SIZE>>>(size, r, p, beta);
 
 
     for(int i = 0; i < size; i ++){
@@ -151,11 +151,11 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
 
         float pAp = reduce(n, p, Ap);
         alpha = old_rTr / pAp;
-        update_x<<<(n * n + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(n, x, p, alpha);
+        update_x<<<(size + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(size, x, p, alpha);
 
         cudaDeviceSynchronize();
 
-        update_r<<<(n * n + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, alpha);
+        update_r<<<(size + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(size, r, p, alpha);
 
         cudaDeviceSynchronize();
 
@@ -166,7 +166,7 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
             break;
         }
         beta = new_rTr / old_rTr;
-        update_p<<<(n * n + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, beta);
+        update_p<<<(size + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(size, r, p, beta);
         old_rTr = new_rTr;
     }
 
