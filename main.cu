@@ -100,21 +100,21 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
         cudaDeviceSynchronize();
 
         float pAp = 0.f;
-        reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, p, Ap, &pAp);
+        reduce<<<(n * n + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(n, p, Ap, &pAp);
 
         cudaDeviceSynchronize();
 
         alpha = old_rTr / pAp;
-        update_x<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, x, p, alpha);
+        update_x<<<(n * n + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(n, x, p, alpha);
 
         cudaDeviceSynchronize();
 
-        update_r<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, alpha);
+        update_r<<<(n * n + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, alpha);
 
         cudaDeviceSynchronize();
 
         float new_rTr = 0.f;
-        reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &new_rTr);
+        reduce<<<(n * n + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &new_rTr);
 
         cudaDeviceSynchronize();
 
@@ -123,7 +123,7 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
             break;
         }
         beta = new_rTr / old_rTr;
-        update_p<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, beta);
+        update_p<<<(n * n + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, beta);
         old_rTr = new_rTr;
     }
 
@@ -159,7 +159,7 @@ int main() {
             ifs.close();
 
             if(i == 1){
-                for(int k = 0; k < 4; k ++){
+                for(int k = 0; k < 4 * 4; k ++){
                     printf("%f ",B[k]);
                 }
                 printf("\n");
