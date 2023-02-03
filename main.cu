@@ -96,13 +96,28 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
         dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
         dim3 dimGrid((n + BLOCK_SIZE - 1) / BLOCK_SIZE, (n + BLOCK_SIZE - 1) / BLOCK_SIZE);
         compute_Ap<<< dimGrid, dimBlock >>>(n, p, Ap);
+
+        cudaDeviceSynchronize();
+
         float pAp = 0.f;
         reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, p, Ap, &pAp);
+
+        cudaDeviceSynchronize();
+
         alpha = old_rTr / pAp;
         update_x<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, x, p, alpha);
+
+        cudaDeviceSynchronize();
+
         update_r<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, alpha);
+
+        cudaDeviceSynchronize();
+
         float new_rTr = 0.f;
         reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &new_rTr);
+
+        cudaDeviceSynchronize();
+
         if (sqrt(new_rTr) < eps){
             printf(">>> Conjugate Gradient method converged at time %d.\n", i);
             break;
@@ -117,6 +132,9 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
     dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
     dim3 dimGrid((n + BLOCK_SIZE - 1) / BLOCK_SIZE, (n + BLOCK_SIZE - 1) / BLOCK_SIZE);
     check_solution<<<dimGrid, dimBlock >>>(n, Ax, x, b, &residual_cg);
+
+    cudaDeviceSynchronize();
+
     printf(">>> Checking the residual norm(Ax-b)...\n");
     printf(">>> Residual CGPoissonSolver: %f\n",sqrt(residual_cg));
     assert(residual_cg < eps);
