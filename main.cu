@@ -22,7 +22,9 @@ __global__ void compute_Ap(int n, const float *p, float *Ap){
         Ap[i][j] = 0.f;
         return;
     }
-    Ap[i][j] = 4.0 * p[i][j] - p[i - 1][j] - p[i + 1][j] - p[i][j - 1] - p[i][j + 1];
+    Ap(i, j) = 4.0 * p(i, j) - p(i - 1,j) - p(i + 1, j) - p(i, j - 1) - p(i, j + 1);
+#undef Ap
+#undef p
 }
 
 __global__ void reduce(int n, const float *p, const float *q, float *result){
@@ -33,8 +35,6 @@ __global__ void reduce(int n, const float *p, const float *q, float *result){
         res += p[i] * q[i];
     }
     *result += res;
-#undef Ap
-#undef p
 }
 
 __global__ void update_x(int n, float *x, const float *p, const float alpha){
@@ -88,7 +88,7 @@ void cgSolver(int n, float eps){
     for(int i = 0; i < size; i ++){
         dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
         dim3 dimGrid(n / BLOCK_SIZE, n / BLOCK_SIZE);
-        compute_Ap<<< dimGrid, dimBlock >>>(n, p, ap);
+        compute_Ap<<< dimGrid, dimBlock >>>(n, p, Ap);
         float pAp = 0.f;
         reduce<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, r, &pAp);
         alpha = old_rTr / pAp;
@@ -100,7 +100,7 @@ void cgSolver(int n, float eps){
             break;
         }
         beta = new_rTr / old_rTr;
-        update_p(n, r, p, beta);
+        update_p<<<n * n / BLOCK_SIZE, BLOCK_SIZE>>>(n, r, p, beta);
         old_rTr = new_rTr;
     }
 
@@ -129,7 +129,7 @@ int main() {
             PRINT_TIME(
                     cgSolver(p_size, eps);
                     );
-            std::string output_name = "ans_" + std::to_string(i) + "_" + std::to_string(p_size) + "_" + std::to_string(j) + '.bin';
+            std::string output_name = "ans_" + std::to_string(i) + "_" + std::to_string(p_size) + "_" + std::to_string(j) + ".bin";
             std::ofstream ofs(output_name, std::ios::binary | std::ios::out);
             ofs.write((const char*)X, sizeof(float) * p_size * p_size);
             ofs.close();
