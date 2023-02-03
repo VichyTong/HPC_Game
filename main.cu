@@ -78,11 +78,16 @@ __global__ void deviceReduceKernelStep2(int n, float *p, float *output) {
 }
 
 float reduce(int n, float *p, float *q){
-    int blocks = std::min((n * n + BLOCK_SIZE - 1)/ BLOCK_SIZE, 1024);
-    auto output = new float[1024];
-    deviceReduceKernelStep1<<<blocks, BLOCK_SIZE>>>(n * n, p, q, output);
-    deviceReduceKernelStep2<<<1, 1024>>>(n * n, output, output);
-    return output[0];
+//    int blocks = std::min((n * n + BLOCK_SIZE - 1)/ BLOCK_SIZE, 1024);
+//    auto output = new float[1024];
+//    deviceReduceKernelStep1<<<blocks, BLOCK_SIZE>>>(n * n, p, q, output);
+//    deviceReduceKernelStep2<<<1, 1024>>>(n * n, output, output);
+//    return output[0];
+    float ans = 0.f;
+    for(int i = 0; i < n * n; i ++){
+        ans += p[i] * q[i];
+    }
+    return ans;
 }
 
 __global__ void update_x(int n, float *x, const float *p, const float alpha){
@@ -157,7 +162,7 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
         float new_rTr = reduce(n, r, r);
 
         if (sqrt(new_rTr) < eps){
-            printf(">>> Conjugate Gradient method converged at time %d.\n", i);
+            printf(">>> Conjugate Gradient method converged at time %d.\n", i + 1);
             break;
         }
         beta = new_rTr / old_rTr;
