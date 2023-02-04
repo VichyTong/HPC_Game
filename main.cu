@@ -46,7 +46,7 @@ __global__ void reductionKernel(const int n, float *p, float *q, float *res){
             sum += __shfl_down_sync(FULL_MASK, sum, offset);
         }
         if(lane_id == 0){
-            atomicAdd(res, sum);
+            res[warp_id] = sum;
         }
     }
 }
@@ -54,11 +54,16 @@ __global__ void reductionKernel(const int n, float *p, float *q, float *res){
 float reduce(int n, float *p, float *q){
     dim3 dim_block(BLOCK_SIZE);
     dim3 dim_grid((n + (BLOCK_SIZE / WARP_SIZE) - 1) / (BLOCK_SIZE / WARP_SIZE));
-    float res = 0.f;
-    reductionKernel<<<dim_grid, dim_block>>>(n, p, q, &res);
-
+    float *res_host = new float [n];
+    float *res_device;
+    cudaMalloc(&res_device, n * sizeof(float));
+    reductionKernel<<<dim_grid, dim_block>>>(n, p, q, res_device);
     cudaDeviceSynchronize();
-
+    cudaMemcpy(res_host, res_device, n * sizeof(float), cudaMemcpyDeviceToHost);
+    float res = 0.f;
+    for(int i = 0; i < n ; i ++){
+        res += res_host[i];
+    }
     return res;
 }
 
@@ -86,27 +91,41 @@ __global__ void update_p(int size, const float *r, float *p, const float beta){
     }
 }
 
-__global__ void check_solution(int n, float *Ax, const float *x, const float *b, float *residual){
+__global__ void check_solution(int n, float *Ax, const float *x, const float *b, float *c){
 #define Ax(i, j) Ax[(i) * n + (j)]
 #define x(i, j) x[(i) * n + (j)]
 #define b(i, j) b[(i) * n + (j)]
+#define c(i, j) c[(i) * n + (j)]
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     if(i >= n || j >= n){
         Ax(i, j) = 0.f;
         return;
     }
-    Ax(i, j) = 4.0 * x(i, j) - x(i - 1, j) - x(i + 1, j) - x(i, j - 1) - x(i, j + 1);
-    atomicAdd(residual, (b(i, j) - Ax(i, j)) * (b(i, j) - Ax(i, j)));
+    Ax(i, j) = 4.0 * x(i, j);
+    if(i > 0){
+        Ax(i, j) -= x(i - 1, j);
+    }
+    if(i <= n){
+        Ax(i, j) -= x(i + 1, j);
+    }
+    if(j > 0){
+        Ax(i, j) -= x(i, j - 1);
+    }
+    if(j <= n){
+        Ax(i, j) -= x(i, j + 1);
+    }
+    c(i, j) = b(i, j) - Ax(i, j);
 #undef Ax
 #undef x
 #undef b
+#undef c
 }
 
 float B[2048 * 2048];
 float X[2048 * 2048];
 
-void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap, float *Ax){
+void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap, float *Ax, float *c){
     int size = n * n;
     float alpha = 0.f, beta = 0.f;
     float initial_rTr = reduce(n, r, r);
@@ -143,13 +162,11 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
         old_rTr = new_rTr;
     }
 
-    float residual_cg = 0.f;
-
     dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
     dim3 dimGrid((n + BLOCK_SIZE - 1) / BLOCK_SIZE, (n + BLOCK_SIZE - 1) / BLOCK_SIZE);
-    check_solution<<<dimGrid, dimBlock >>>(n, Ax, x, b, &residual_cg);
-
+    check_solution<<<dimGrid, dimBlock >>>(n, Ax, x, b, c);
     cudaDeviceSynchronize();
+    float  residual_cg = reduce(n, c, c);
 
     printf(">>> Checking the residual norm(Ax-b)...\n");
     printf(">>> Residual CGPoissonSolver: %f\n",sqrt(residual_cg));
@@ -175,23 +192,19 @@ int main() {
             ifs.close();
 
             int size = p_size * p_size;
-            float *r, *b, *x, *p, *Ap, *Ax;
+            float *r, *b, *x, *p, *Ap, *Ax, *c;
             cudaMalloc(&r, size * sizeof(float));
             cudaMalloc(&b, size * sizeof(float));
             cudaMalloc(&x, size * sizeof(float));
             cudaMalloc(&p, size * sizeof(float));
             cudaMalloc(&Ap, size * sizeof(float));
             cudaMalloc(&Ax, size * sizeof(float));
-            cudaMemset(&x, 0, size * sizeof(float));
-            cudaMemset(&p, 0, size * sizeof(float));
-            cudaMemset(&Ap, 0, size * sizeof(float));
-            cudaMemset(&Ax, 0, size * sizeof(float));
-
+            cudaMalloc(&c, size * sizeof(float));
             cudaMemcpy(b, B, size * sizeof(float), cudaMemcpyHostToDevice);
             cudaMemcpy(r, B, size * sizeof(float), cudaMemcpyHostToDevice);
 
             ADD_TIME(
-                    cgSolver(p_size, eps, r, b, x, p, Ap, Ax);
+                    cgSolver(p_size, eps, r, b, x, p, Ap, Ax, c);
                     );
 
             cudaFree(r);
@@ -200,6 +213,7 @@ int main() {
             cudaFree(p);
             cudaFree(Ap);
             cudaFree(Ax);
+            cudaFree(c);
 
             std::string output_name = "ans_" + std::to_string(i) + "_" + std::to_string(p_size) + "_" + std::to_string(j) + ".bin";
             std::ofstream ofs(output_name, std::ios::binary | std::ios::out);
