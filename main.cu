@@ -150,10 +150,7 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
         cudaDeviceSynchronize();
 
         float pAp = reduce(n, p, Ap);
-        if(isnan(pAp)){
-            printf(">>> time = %d pAp = %f\n",i + 1, pAp);
-            return;
-        }
+        printf(">>> time = %d pAp = %f\n",i + 1, pAp);
         alpha = old_rTr / pAp;
         update_x<<<(size + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(size, x, p, alpha);
 
