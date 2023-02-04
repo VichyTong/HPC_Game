@@ -25,7 +25,7 @@ __global__ void compute_Ap(int n, const float *p, float *Ap){
         Ap(i, j) = 0.f;
         return;
     }
-    float res = 1.f;
+    float res = 0.f;
     res = 4.0 * p(i, j);
     if(i > 0){
         res -= p(i - 1, j);
@@ -74,6 +74,7 @@ float reduce(int n, float *p, float *q){
     cudaMemcpy(res_host, res_device, n * sizeof(float), cudaMemcpyDeviceToHost);
     float res = 0.f;
     for(int i = 0; i < n ; i ++){
+        printf("%f\n",res_host[i]);
         res += res_host[i];
     }
     cudaFree(res_device);
