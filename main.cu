@@ -86,6 +86,12 @@ float reduce(int n, float *p, float *q){
     float  res = 0.f;
     for(int i = 0; i < n * n; i ++){
         res += P[i] * Q[i];
+        if(P[i] == 0){
+            printf("p");
+        }
+        if(Q[i]==0){
+            printf("q");
+        }
     }
     return res;
 }
