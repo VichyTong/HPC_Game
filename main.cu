@@ -80,9 +80,12 @@ float reduce(int n, float *p, float *q){
 //    cudaFree(res_device);
 //    delete[] res_host;
 //    return res;
+    float *P = new float [n * n], *Q = new float [n * n];
+    cudaMemcpy(P, p, n * n * sizeof (float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(Q, q, n * n * sizeof (float), cudaMemcpyDeviceToHost);
     float  res = 0.f;
-    for(int i = 0; i < n * n, i ++){
-        res += p[i] * q[i];
+    for(int i = 0; i < n * n; i ++){
+        res += P[i] * Q[i];
     }
     return res;
 }
