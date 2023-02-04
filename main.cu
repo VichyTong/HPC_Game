@@ -7,7 +7,8 @@
 #include <assert.h>
 #include <cstdio>
 
-#define BLOCK_SIZE 64
+#define BLOCK_SIZE 128
+#define WARP_SIZE 32
 
 #define ADD_TIME(code) do { \
     auto start = std::chrono::system_clock::now(); \
@@ -31,85 +32,56 @@ __global__ void compute_Ap(int n, const float *p, float *Ap){
 #undef p
 }
 
-__device__ float warpReduceSum(float val) {
-    for (int offset = warpSize >> 1; offset > 0; offset >>= 1){
-        val += __shfl_down(val, offset);
-    }
-    return val;
-}
-
-__device__ float blockReduceSum(float val) {
-    static __shared__ int shared[32];
-    int lane = threadIdx.x % warpSize;
-    int wid = threadIdx.x / warpSize;
-    val = warpReduceSum(val);
-    if (lane == 0) {
-        shared[wid] = val;
-    }
-    __syncthreads();
-    val = (threadIdx.x < blockDim.x / warpSize) ? shared[lane] : 0;
-    if (wid == 0) {
-        val = warpReduceSum(val);
-    }
-    return val;
-}
-
-__global__ void deviceReduceKernelStep1(int n, float *p, float *q, float *output) {
+__global__ void reductionKernel(const int n, float *p, float *q, float *res){
     int index = blockIdx.x * blockDim.x + threadIdx.x;
-    int stride = blockDim.x * gridDim.x;
-    float sum = 0;
-    for (int i = index; i < n; i += stride) {
-        sum += p[i] * q[i];
+    int warp_id = index / WARP_SIZE;
+    int lane_id = index % WARP_SIZE;
+    const unsigned int FULL_MASK = 0xffffffff;
+    if(warp_id < n){
+        float sum = 0.f;
+        for(int i = lane_id; i < n; i += WARP_SIZE){
+            sum += p[warp_id * n + i] * q[warp_id * n + i];
+        }
+        for (int offset = 16; offset > 0; offset >>= 1) {
+            sum += __shfl_down_sync(FULL_MASK, sum, offset);
+        }
+        if(lane_id == 0){
+            atomicAdd(res, sum);
+        }
     }
-    sum = blockReduceSum(sum);
-    if (threadIdx.x == 0)
-        output[blockIdx.x] = sum;
-}
-__global__ void deviceReduceKernelStep2(int n, float *p, float *output) {
-    int index = blockIdx.x * blockDim.x + threadIdx.x;
-    int stride = blockDim.x * gridDim.x;
-    float sum = 0;
-    for (int i = index; i < n; i += stride) {
-        sum += p[i];
-    }
-    sum = blockReduceSum(sum);
-    if (threadIdx.x == 0)
-        output[blockIdx.x] = sum;
 }
 
 float reduce(int n, float *p, float *q){
-//    int blocks = std::min((n * n + BLOCK_SIZE - 1)/ BLOCK_SIZE, 1024);
-//    auto output = new float[1024];
-//    deviceReduceKernelStep1<<<blocks, BLOCK_SIZE>>>(n * n, p, q, output);
-//    deviceReduceKernelStep2<<<1, 1024>>>(n * n, output, output);
-//    return output[0];
-    float ans = 0.f;
-    for(int i = 0; i < n * n; i ++){
-        ans += p[i] * q[i];
-    }
-    return ans;
+    dim3 dim_block(BLOCK_SIZE);
+    dim3 dim_grid((n + (BLOCK_SIZE / WARP_SIZE) - 1) / (BLOCK_SIZE / WARP_SIZE));
+    float res = 0.f;
+    reductionKernel<<<dim_grid, dim_block>>>(n, p, q, &res);
+
+    cudaDeviceSynchronize();
+
+    return res;
 }
 
-__global__ void update_x(int n, float *x, const float *p, const float alpha){
+__global__ void update_x(int size, float *x, const float *p, const float alpha){
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
-    for(int i = index; i < n; i += stride){
+    for(int i = index; i < size; i += stride){
         x[i] += alpha * p[i];
     }
 }
 
-__global__ void update_r(int n, float *r, const float *p, const float alpha){
+__global__ void update_r(int size, float *r, const float *p, const float alpha){
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
-    for(int i = index; i < n; i += stride){
+    for(int i = index; i < size; i += stride){
         r[i] -= alpha * p[i];
     }
 }
 
-__global__ void update_p(int n, const float *r, float *p, const float beta){
+__global__ void update_p(int size, const float *r, float *p, const float beta){
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
-    for(int i = index; i < n; i += stride){
+    for(int i = index; i < size; i += stride){
         p[i] = r[i] + beta * p[i];
     }
 }
@@ -122,9 +94,10 @@ __global__ void check_solution(int n, float *Ax, const float *x, const float *b,
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     if(i >= n || j >= n){
         Ax(i, j) = 0.f;
+        return;
     }
     Ax(i, j) = 4.0 * x(i, j) - x(i - 1, j) - x(i + 1, j) - x(i, j - 1) - x(i, j + 1);
-    *residual += (b(i, j) - Ax(i, j)) * (b(i, j) - Ax(i, j));
+    atomicAdd(residual, (b(i, j) - Ax(i, j)) * (b(i, j) - Ax(i, j)));
 #undef Ax
 #undef x
 #undef b
