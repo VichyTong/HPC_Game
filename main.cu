@@ -160,9 +160,13 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
         compute_Ap<<< dimGrid, dimBlock >>>(n, p, Ap);
 
         cudaDeviceSynchronize();
-        float App;
-        cudaMemcpy(&App, Ap, sizeof (float), cudaMemcpyDeviceToHost);
-        printf("%f\n",App);
+        float App[16];
+        cudaMemcpy(App, Ap, 16 * sizeof (float), cudaMemcpyDeviceToHost);
+        for(int j = 0; j < 16; j ++){
+            printf("%f ",App[j]);
+        }
+        pritnf("\n");
+
 
         float pAp = reduce(n, p, Ap);
         printf(">>> time = %d pAp = %f\n",i + 1, pAp);
