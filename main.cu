@@ -1,7 +1,5 @@
 #include <chrono>
 #include <iostream>
-#include <random>
-#include <string>
 #include <fstream>
 #include <cmath>
 #include <assert.h>
@@ -76,6 +74,7 @@ float reduce(int n, float *p, float *q){
     for(int i = 0; i < n ; i ++){
         res += res_host[i];
     }
+    cudaFree(res_device);
     return res;
 }
 
@@ -164,7 +163,10 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
         cudaDeviceSynchronize();
 
         float new_rTr = reduce(n, r, r);
-        printf(">>> time = %d rTr = %f\n",i + 1, new_rTr);
+        if(isnan(new_rTr)){
+            printf(">>> time = %d rTr = %f\n",i + 1, new_rTr);
+            break;
+        }
         if (sqrt(new_rTr) < eps){
             printf(">>> Conjugate Gradient method converged at time %d.\n", i + 1);
             break;
