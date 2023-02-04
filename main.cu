@@ -26,19 +26,19 @@ __global__ void compute_Ap(int n, const float *p, float *Ap){
         return;
     }
     float res = 1.f;
-//    res = 4.0 * p(i, j);
-//    if(i > 0){
-//        res -= p(i - 1, j);
-//    }
-//    if(i <= n){
-//        res -= p(i + 1, j);
-//    }
-//    if(j > 0){
-//        res -= p(i, j - 1);
-//    }
-//    if(j <= n){
-//        res -= p(i, j + 1);
-//    }
+    res = 4.0 * p(i, j);
+    if(i > 0){
+        res -= p(i - 1, j);
+    }
+    if(i <= n){
+        res -= p(i + 1, j);
+    }
+    if(j > 0){
+        res -= p(i, j - 1);
+    }
+    if(j <= n){
+        res -= p(i, j + 1);
+    }
     Ap(i, j) = res;
 #undef Ap
 #undef p
@@ -65,7 +65,7 @@ __global__ void reductionKernel(const int n, float *p, float *q, float *res){
 
 float reduce(int n, float *p, float *q){
     dim3 dim_block(BLOCK_SIZE);
-    dim3 dim_grid((n + (BLOCK_SIZE / WARP_SIZE) - 1) / (BLOCK_SIZE / WARP_SIZE));
+    dim3 dim_grid((n + BLOCK_SIZE - 1) / BLOCK_SIZE);
     float *res_host = new float [n];
     float *res_device;
     cudaMalloc(&res_device, n * sizeof(float));
