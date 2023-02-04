@@ -25,21 +25,21 @@ __global__ void compute_Ap(int n, const float *p, float *Ap){
         Ap(i, j) = 0.f;
         return;
     }
-    float res = 0.f;
-    res = 4.0 * p(i, j);
-    if(i > 0){
-        res -= p(i - 1, j);
-    }
-    if(i <= n){
-        res -= p(i + 1, j);
-    }
-    if(j > 0){
-        res -= p(i, j - 1);
-    }
-    if(j <= n){
-        res -= p(i, j + 1);
-    }
-    Ap(i, j) = res;
+//    float res = 0.f;
+//    res = 4.0 * p(i, j);
+//    if(i > 0){
+//        res -= p(i - 1, j);
+//    }
+//    if(i <= n){
+//        res -= p(i + 1, j);
+//    }
+//    if(j > 0){
+//        res -= p(i, j - 1);
+//    }
+//    if(j <= n){
+//        res -= p(i, j + 1);
+//    }
+    Ap(i, j) = 1.f;
 #undef Ap
 #undef p
 }
