@@ -17,27 +17,29 @@
 } while(0)
 
 __global__ void compute_Ap(int n, const float *p, float *Ap){
-#define Ap(i, j) Ap[(i) * n + j]
-#define p(i, j) p[(i) * n + j]
+#define Ap(i, j) Ap[(i) * n + (j)]
+#define p(i, j) p[(i) * n + (j)]
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     if (i >= n || j >= n){
         Ap(i, j) = 0.f;
         return;
     }
-    Ap(i, j) = 4.0 * p(i, j);
+    float res = 0.f;
+    res = 4.0 * p(i, j);
     if(i > 0){
-        Ap(i, j) -= p(i - 1, j);
+        res -= p(i - 1, j);
     }
     if(i <= n){
-        Ap(i, j) -= p(i + 1, j);
+        res -= p(i + 1, j);
     }
     if(j > 0){
-        Ap(i, j) -= p(i, j - 1);
+        res -= p(i, j - 1);
     }
     if(j <= n){
-        Ap(i, j) -= p(i, j + 1);
+        res -= p(i, j + 1);
     }
+    Ap(i, j) = res;
 #undef Ap
 #undef p
 }
