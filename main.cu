@@ -16,30 +16,6 @@
     time += double(duration.count());\
 } while(0)
 
-__global__ void compute_Ap(int n, const float *p, float *Ap){
-#define Ap(i, j) Ap[(i) * n + (j)]
-#define p(i, j) p[(i) * n + (j)]
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    int j = blockIdx.y * blockDim.y + threadIdx.y;
-//    float res = 0.f;
-//    res = 4.0 * p(i, j);
-//    if(i > 0){
-//        res -= p(i - 1, j);
-//    }
-//    if(i <= n){
-//        res -= p(i + 1, j);
-//    }
-//    if(j > 0){
-//        res -= p(i, j - 1);
-//    }
-//    if(j <= n){
-//        res -= p(i, j + 1);
-//    }
-    Ap[i * n + j] = 1.0;
-#undef Ap
-#undef p
-}
-
 __global__ void reductionKernel(const int n, float *p, float *q, float *res){
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     int warp_id = index / WARP_SIZE;
@@ -141,6 +117,30 @@ __global__ void check_solution(int n, float *Ax, const float *x, const float *b,
 #undef c
 }
 
+__global__ void compute_Ap(int n, const float *p, float *Ap){
+#define Ap(i, j) Ap[(i) * n + (j)]
+#define p(i, j) p[(i) * n + (j)]
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+//    float res = 0.f;
+//    res = 4.0 * p(i, j);
+//    if(i > 0){
+//        res -= p(i - 1, j);
+//    }
+//    if(i <= n){
+//        res -= p(i + 1, j);
+//    }
+//    if(j > 0){
+//        res -= p(i, j - 1);
+//    }
+//    if(j <= n){
+//        res -= p(i, j + 1);
+//    }
+    Ap[i * n + j] = 1.0;
+#undef Ap
+#undef p
+}
+
 float B[2048 * 2048];
 float X[2048 * 2048];
 
@@ -153,11 +153,13 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
     for(int i = 0; i < size; i ++){
         dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
         dim3 dimGrid((n + BLOCK_SIZE - 1) / BLOCK_SIZE, (n + BLOCK_SIZE - 1) / BLOCK_SIZE);
+
         compute_Ap<<<dimGrid, dimBlock>>>(n, p, Ap);
+
         cudaDeviceSynchronize();
         float App[2048];
-        cudaMemcpy(App, Ap + 256 * siz, 256 * sizeof (float), cudaMemcpyDeviceToHost);
-        for(int j = 0; j < 16; j ++){
+        cudaMemcpy(App, Ap + 256 * sizeof(float), 256 * sizeof (float), cudaMemcpyDeviceToHost);
+        for(int j = 0; j < 256; j ++){
             printf("%f ",App[j]);
         }
         printf("\n");
