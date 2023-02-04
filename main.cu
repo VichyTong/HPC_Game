@@ -27,7 +27,19 @@ __global__ void compute_Ap(int n, const float *p, float *Ap){
         Ap(i, j) = 0.f;
         return;
     }
-    Ap(i, j) = 4.0 * p(i, j) - p(i - 1,j) - p(i + 1, j) - p(i, j - 1) - p(i, j + 1);
+    Ap(i, j) = 4.0 * p(i, j);
+    if(i > 0){
+        Ap(i, j) -= p(i - 1, j);
+    }
+    if(i <= n){
+        Ap(i, j) -= p(i + 1, j);
+    }
+    if(j > 0){
+        Ap(i, j) -= p(i, j - 1);
+    }
+    if(j <= n){
+        Ap(i, j) -= p(i, j + 1);
+    }
 #undef Ap
 #undef p
 }
@@ -75,11 +87,11 @@ __global__ void update_x(int size, float *x, const float *p, const float alpha){
     }
 }
 
-__global__ void update_r(int size, float *r, const float *p, const float alpha){
+__global__ void update_r(int size, float *r, const float *Ap, const float alpha){
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
     for(int i = index; i < size; i += stride){
-        r[i] -= alpha * p[i];
+        r[i] -= alpha * Ap[i];
     }
 }
 
@@ -147,7 +159,7 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
 
         cudaDeviceSynchronize();
 
-        update_r<<<(size + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(size, r, p, alpha);
+        update_r<<<(size + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(size, r, Ap, alpha);
 
         cudaDeviceSynchronize();
 
