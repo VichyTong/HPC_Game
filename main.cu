@@ -122,21 +122,21 @@ __global__ void compute_Ap(int n, float *p, float *Ap){
 #define p(i, j) p[(i) * n + (j)]
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
-//    float res = 0.f;
-//    res = 4.0 * p(i, j);
-//    if(i > 0){
-//        res -= p(i - 1, j);
-//    }
-//    if(i <= n){
-//        res -= p(i + 1, j);
-//    }
-//    if(j > 0){
-//        res -= p(i, j - 1);
-//    }
-//    if(j <= n){
-//        res -= p(i, j + 1);
-//    }
-    Ap[i * n + j] = 1.0;
+    float res = 0.f;
+    res = 4.0 * p(i, j);
+    if(i > 0){
+        res -= p(i - 1, j);
+    }
+    if(i <= n){
+        res -= p(i + 1, j);
+    }
+    if(j > 0){
+        res -= p(i, j - 1);
+    }
+    if(j <= n){
+        res -= p(i, j + 1);
+    }
+    Ap(i, j) = res;
 #undef Ap
 #undef p
 }
