@@ -21,10 +21,6 @@ __global__ void compute_Ap(int n, const float *p, float *Ap){
 #define p(i, j) p[(i) * n + (j)]
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
-    if (i >= n || j >= n){
-        Ap(i, j) = 0.f;
-        return;
-    }
 //    float res = 0.f;
 //    res = 4.0 * p(i, j);
 //    if(i > 0){
@@ -157,15 +153,14 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
     for(int i = 0; i < size; i ++){
         dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
         dim3 dimGrid((n + BLOCK_SIZE - 1) / BLOCK_SIZE, (n + BLOCK_SIZE - 1) / BLOCK_SIZE);
-        compute_Ap<<< dimGrid, dimBlock >>>(n, p, Ap);
-
+        compute_Ap<<<dimGrid, dimBlock>>>(n, p, Ap);
         cudaDeviceSynchronize();
         float App[16];
-        cudaMemcpy(App, Ap, 16 * sizeof (float), cudaMemcpyDeviceToHost);
+        cudaMemcpy(App, Ap + 128 * sizeof(float), 16 * sizeof (float), cudaMemcpyDeviceToHost);
         for(int j = 0; j < 16; j ++){
             printf("%f ",App[j]);
         }
-        pritnf("\n");
+        printf("\n");
 
 
         float pAp = reduce(n, p, Ap);
