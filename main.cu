@@ -141,7 +141,7 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
     int size = n * n;
     float alpha = 0.f, beta = 0.f;
     float initial_rTr = reduce(n, r, r);
-    printf(">>> Initial residual = %f\n", initial_rTr);
+    printf(">>> Initial residual = %f\n", sqrt(initial_rTr));
     float old_rTr = initial_rTr;
     update_p<<<size / BLOCK_SIZE, BLOCK_SIZE>>>(size, r, p, beta);
 
@@ -164,7 +164,7 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
         cudaDeviceSynchronize();
 
         float new_rTr = reduce(n, r, r);
-
+        printf(">>> time = %d rTr = %f\n",i + 1, new_rTr);
         if (sqrt(new_rTr) < eps){
             printf(">>> Conjugate Gradient method converged at time %d.\n", i + 1);
             break;
