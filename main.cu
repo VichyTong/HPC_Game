@@ -77,6 +77,7 @@ float reduce(int n, float *p, float *q){
         res += res_host[i];
     }
     cudaFree(res_device);
+    delete res_host[];
     return res;
 }
 
