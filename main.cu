@@ -142,9 +142,6 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
     float initial_rTr = reduce(n, r, r);
     printf(">>> Initial residual = %f\n", sqrt(initial_rTr));
     float old_rTr = initial_rTr;
-    update_p<<<size / BLOCK_SIZE, BLOCK_SIZE>>>(size, r, p, beta);
-
-
     for(int i = 0; i < size; i ++){
         dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
         dim3 dimGrid((n + BLOCK_SIZE - 1) / BLOCK_SIZE, (n + BLOCK_SIZE - 1) / BLOCK_SIZE);
@@ -220,6 +217,7 @@ int main() {
             cudaMalloc(&c, size * sizeof(float));
             cudaMemcpy(b, B, size * sizeof(float), cudaMemcpyHostToDevice);
             cudaMemcpy(r, B, size * sizeof(float), cudaMemcpyHostToDevice);
+            cudaMemcpy(p, B, size * sizeof (float), cudaMemcpyHostToDevice);
 
             ADD_TIME(
                     cgSolver(p_size, eps, r, b, x, p, Ap, Ax, c);
