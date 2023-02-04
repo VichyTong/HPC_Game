@@ -136,6 +136,7 @@ __global__ void compute_Ap(int n, const float *p, float *Ap){
 //    if(j <= n){
 //        res -= p(i, j + 1);
 //    }
+    printf("1");
     Ap[i * n + j] = 1.0;
 #undef Ap
 #undef p
@@ -155,8 +156,8 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
         dim3 dimGrid((n + BLOCK_SIZE - 1) / BLOCK_SIZE, (n + BLOCK_SIZE - 1) / BLOCK_SIZE);
 
         compute_Ap<<<dimGrid, dimBlock>>>(n, p, Ap);
-
         cudaDeviceSynchronize();
+        cudaDeviceReset();
         float App[2048];
         cudaMemcpy(App, Ap + 256 * sizeof(float), 256 * sizeof (float), cudaMemcpyDeviceToHost);
         for(int j = 0; j < 256; j ++){
