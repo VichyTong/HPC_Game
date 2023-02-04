@@ -64,21 +64,26 @@ __global__ void reductionKernel(const int n, float *p, float *q, float *res){
 }
 
 float reduce(int n, float *p, float *q){
-    dim3 dim_block(BLOCK_SIZE);
-    dim3 dim_grid((n + BLOCK_SIZE - 1) / BLOCK_SIZE);
-    float *res_host = new float [n];
-    float *res_device;
-    cudaMalloc(&res_device, n * sizeof(float));
-    reductionKernel<<<dim_grid, dim_block>>>(n, p, q, res_device);
-    cudaDeviceSynchronize();
-    cudaMemcpy(res_host, res_device, n * sizeof(float), cudaMemcpyDeviceToHost);
-    float res = 0.f;
-    for(int i = 0; i < n ; i ++){
-        printf("%f\n",res_host[i]);
-        res += res_host[i];
+//    dim3 dim_block(BLOCK_SIZE);
+//    dim3 dim_grid((n + BLOCK_SIZE - 1) / BLOCK_SIZE);
+//    float *res_host = new float [n];
+//    float *res_device;
+//    cudaMalloc(&res_device, n * sizeof(float));
+//    reductionKernel<<<dim_grid, dim_block>>>(n, p, q, res_device);
+//    cudaDeviceSynchronize();
+//    cudaMemcpy(res_host, res_device, n * sizeof(float), cudaMemcpyDeviceToHost);
+//    float res = 0.f;
+//    for(int i = 0; i < n ; i ++){
+//        printf("%f\n",res_host[i]);
+//        res += res_host[i];
+//    }
+//    cudaFree(res_device);
+//    delete[] res_host;
+//    return res;
+    float  res = 0.f;
+    for(int i = 0; i < n * n, i ++){
+        res += p[i] * q[i];
     }
-    cudaFree(res_device);
-    delete[] res_host;
     return res;
 }
 
