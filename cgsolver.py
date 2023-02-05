@@ -100,6 +100,8 @@ class CGPoissonSolver:
         self.update_p()  # Initial p = r + beta * p ( beta = 0 )
         # -- Main loop --
         for i in range(self.steps):
+            if i > 150:
+                break
             self.compute_Ap()
             pAp = self.reduce(self.p, self.Ap)
             self.alpha[None] = old_rTr / pAp

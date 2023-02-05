@@ -142,7 +142,7 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
     float initial_rTr = reduce(n, r, r);
     printf(">>> Initial residual = %f\n", sqrt(initial_rTr));
     float old_rTr = initial_rTr;
-    for(int i = 0; i < size; i ++){
+    for(int i = 0; i < 150; i ++){
         dim3 dimBlock(SMALL_BLOCK_SIZE, SMALL_BLOCK_SIZE);
         dim3 dimGrid((n + SMALL_BLOCK_SIZE - 1) / SMALL_BLOCK_SIZE, (n + SMALL_BLOCK_SIZE - 1) / SMALL_BLOCK_SIZE);
 
