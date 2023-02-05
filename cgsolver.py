@@ -106,15 +106,18 @@ class CGPoissonSolver:
             self.update_x()
             self.update_r()
             new_rTr = self.reduce(self.r, self.r)
+            xTx = self.reduce(self.x, self.x)
             if ti.sqrt(new_rTr) < self.eps:
                 print('>>> Conjugate Gradient method converged.')
                 break
             self.beta[None] = new_rTr / old_rTr
             self.update_p()
+            pTp = self.reduce(self.p, self.p)
             old_rTr = new_rTr
             if not self.quiet:
                 print(f'>>> Iter = {i+1:4}, Residual = {ti.sqrt(new_rTr):e}')
-
+                print(f'>>> Iter = {i+1:4}, xTx = {ti.sqrt(xTx):e}')
+                print(f'>>> Iter = {i+1:4}, pTp = {ti.sqrt(pTp):e}')
 
     @ti.kernel
     def check_solution(self)->ti.f64:
