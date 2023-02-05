@@ -153,8 +153,10 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
         float pAp = reduce(n, p, Ap);
         alpha = old_rTr / pAp;
         update_x<<<(size + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(size, x, p, alpha);
-
         cudaDeviceSynchronize();
+
+        float xTx = reduce(n, x, x);
+        printf(">>>time = %d, xTx = %f\n", i + 1, sqrt(xTx));
 
         update_r<<<(size + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(size, r, Ap, alpha);
 
@@ -169,6 +171,10 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
         beta = new_rTr / old_rTr;
         update_p<<<(size + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(size, r, p, beta);
         cudaDeviceSynchronize();
+
+        float pTp = reduce(n, p, p);
+        printf(">>>time = %d, pTp = %f\n", i + 1, sqrt(pTp));
+
         old_rTr = new_rTr;
     }
 
