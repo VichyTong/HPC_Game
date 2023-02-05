@@ -168,6 +168,7 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
         }
         beta = new_rTr / old_rTr;
         update_p<<<(size + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(size, r, p, beta);
+        cudaDeviceSynchronize();
         old_rTr = new_rTr;
     }
 
