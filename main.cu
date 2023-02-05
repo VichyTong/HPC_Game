@@ -5,7 +5,7 @@
 #include <assert.h>
 #include <cstdio>
 
-#define BLOCK_SIZE 128
+#define BLOCK_SIZE 64
 #define WARP_SIZE 32
 
 #define ADD_TIME(code) do { \
