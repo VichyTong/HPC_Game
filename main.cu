@@ -38,7 +38,7 @@ __global__ void reductionKernel(const int n, float *p, float *q, float *res){
 
 float reduce(int n, float *p, float *q){
     dim3 dim_block(BLOCK_SIZE);
-    dim3 dim_grid((n + (BLOCK_SIZE / WARP_SIZE)- 1) / BLOCK_SIZE / WARP_SIZE);
+    dim3 dim_grid((n + (BLOCK_SIZE / WARP_SIZE)- 1) / (BLOCK_SIZE / WARP_SIZE));
     float *res_host = new float [n];
     float *res_device;
     cudaMalloc(&res_device, n * sizeof(float));
@@ -161,6 +161,9 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
         cudaDeviceSynchronize();
 
         float new_rTr = reduce(n, r, r);
+        if(i + 1 > 100){
+            break;
+        }
         printf(">>>time = %d, rTr = %f\n", i + 1, sqrt(new_rTr));
         if (sqrt(new_rTr) < eps){
             printf(">>> Conjugate Gradient method converged at time %d.\n", i + 1);
