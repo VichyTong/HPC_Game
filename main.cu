@@ -37,29 +37,21 @@ __global__ void reductionKernel(const int n, float *p, float *q, float *res){
 }
 
 float reduce(int n, float *p, float *q){
-//    dim3 dim_block(BLOCK_SIZE);
-//    dim3 dim_grid((n + BLOCK_SIZE - 1) / BLOCK_SIZE);
-//    float *res_host = new float [n];
-//    float *res_device;
-//    cudaMalloc(&res_device, n * sizeof(float));
-//    reductionKernel<<<dim_grid, dim_block>>>(n, p, q, res_device);
-//    cudaDeviceSynchronize();
-//    cudaMemcpy(res_host, res_device, n * sizeof(float), cudaMemcpyDeviceToHost);
-//    float res = 0.f;
-//    for(int i = 0; i < n ; i ++){
-//        printf("%f\n",res_host[i]);
-//        res += res_host[i];
-//    }
-//    cudaFree(res_device);
-//    delete[] res_host;
-//    return res;
-    float *P = new float [n * n], *Q = new float [n * n];
-    cudaMemcpy(P, p, n * n * sizeof (float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(Q, q, n * n * sizeof (float), cudaMemcpyDeviceToHost);
-    float  res = 0.f;
-    for(int i = 0; i < n * n; i ++){
-        res += P[i] * Q[i];
+    dim3 dim_block(BLOCK_SIZE);
+    dim3 dim_grid((n + BLOCK_SIZE - 1) / BLOCK_SIZE);
+    float *res_host = new float [n];
+    float *res_device;
+    cudaMalloc(&res_device, n * sizeof(float));
+    reductionKernel<<<dim_grid, dim_block>>>(n, p, q, res_device);
+    cudaDeviceSynchronize();
+    cudaMemcpy(res_host, res_device, n * sizeof(float), cudaMemcpyDeviceToHost);
+    float res = 0.f;
+    for(int i = 0; i < n ; i ++){
+        printf("%f\n",res_host[i]);
+        res += res_host[i];
     }
+    cudaFree(res_device);
+    delete[] res_host;
     return res;
 }
 
@@ -158,16 +150,8 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
         compute_Ap<<<dimGrid, dimBlock>>>(n, p, Ap);
         cudaDeviceSynchronize();
 
-        float App[2048];
-        cudaMemcpy(App, Ap + 256 * sizeof(float), 256 * sizeof (float), cudaMemcpyDeviceToHost);
-        for(int j = 0; j < 256; j ++){
-            printf("%f ",App[j]);
-        }
-        printf("\n");
-
 
         float pAp = reduce(n, p, Ap);
-        printf(">>> time = %d pAp = %f\n",i + 1, pAp);
         alpha = old_rTr / pAp;
         update_x<<<(size + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(size, x, p, alpha);
 
@@ -178,10 +162,6 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
         cudaDeviceSynchronize();
 
         float new_rTr = reduce(n, r, r);
-        if(isnan(new_rTr)){
-            printf(">>> time = %d rTr = %f\n",i + 1, new_rTr);
-            break;
-        }
         if (sqrt(new_rTr) < eps){
             printf(">>> Conjugate Gradient method converged at time %d.\n", i + 1);
             break;
@@ -191,8 +171,8 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
         old_rTr = new_rTr;
     }
 
-    dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 dimGrid((n + BLOCK_SIZE - 1) / BLOCK_SIZE, (n + BLOCK_SIZE - 1) / BLOCK_SIZE);
+    dim3 dimBlock(SMALL_BLOCK_SIZE, SMALL_BLOCK_SIZE);
+    dim3 dimGrid((n + SMALL_BLOCK_SIZE - 1) / SMALL_BLOCK_SIZE, (n + SMALL_BLOCK_SIZE - 1) / SMALL_BLOCK_SIZE);
     check_solution<<<dimGrid, dimBlock >>>(n, Ax, x, b, c);
     cudaDeviceSynchronize();
     float  residual_cg = reduce(n, c, c);
