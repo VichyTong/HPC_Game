@@ -5,7 +5,8 @@
 #include <assert.h>
 #include <cstdio>
 
-#define BLOCK_SIZE 64
+#define BLOCK_SIZE 128
+#define SMALL_BLOCK_SIZE 32
 #define WARP_SIZE 32
 
 #define ADD_TIME(code) do { \
@@ -151,8 +152,8 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
     printf(">>> Initial residual = %f\n", sqrt(initial_rTr));
     float old_rTr = initial_rTr;
     for(int i = 0; i < size; i ++){
-        dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
-        dim3 dimGrid((n + BLOCK_SIZE - 1) / BLOCK_SIZE, (n + BLOCK_SIZE - 1) / BLOCK_SIZE);
+        dim3 dimBlock(SMALL_BLOCK_SIZE, SMALL_BLOCK_SIZE);
+        dim3 dimGrid((n + SMALL_BLOCK_SIZE - 1) / SMALL_BLOCK_SIZE, (n + SMALL_BLOCK_SIZE - 1) / SMALL_BLOCK_SIZE);
 
         compute_Ap<<<dimGrid, dimBlock>>>(n, p, Ap);
         cudaDeviceSynchronize();
