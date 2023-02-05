@@ -47,7 +47,6 @@ float reduce(int n, float *p, float *q){
     cudaMemcpy(res_host, res_device, n * sizeof(float), cudaMemcpyDeviceToHost);
     float res = 0.f;
     for(int i = 0; i < n ; i ++){
-        printf("%f\n",res_host[i]);
         res += res_host[i];
     }
     cudaFree(res_device);
@@ -162,6 +161,7 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
         cudaDeviceSynchronize();
 
         float new_rTr = reduce(n, r, r);
+        printf(">>>time = %d, rTr = %f\n", i + 1, sqrt(new_rTr));
         if (sqrt(new_rTr) < eps){
             printf(">>> Conjugate Gradient method converged at time %d.\n", i + 1);
             break;
