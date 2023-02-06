@@ -115,6 +115,10 @@ __global__ void compute_Ap(int n, float *p, float *Ap){
 #define p(i, j) p[(i) * n + (j)]
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
+    if(i >= n || j >= n){
+        Ax(i, j) = 0.f;
+        return;
+    }
     float res = 0.f;
     res = 4.0 * p(i, j);
     if(i > 0){
