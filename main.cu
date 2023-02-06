@@ -89,20 +89,21 @@ __global__ void check_solution(int n, float *Ax, const float *x, const float *b,
         Ax(i, j) = 0.f;
         return;
     }
-    Ax(i, j) = 4.0 * x(i, j);
+    float res = 4.0 * x(i, j);
     if(i > 0){
-        Ax(i, j) -= x(i - 1, j);
+        res -= x(i - 1, j);
     }
     if(i <= n){
-        Ax(i, j) -= x(i + 1, j);
+        res -= x(i + 1, j);
     }
     if(j > 0){
-        Ax(i, j) -= x(i, j - 1);
+        res -= x(i, j - 1);
     }
     if(j <= n){
-        Ax(i, j) -= x(i, j + 1);
+        res -= x(i, j + 1);
     }
-    c(i, j) = b(i, j) - Ax(i, j);
+    Ax(i, j) = res;
+    c(i, j) = b(i, j) - res;
 #undef Ax
 #undef x
 #undef b
@@ -142,6 +143,10 @@ void cgSolver(int n, float eps, float *r, float *b, float *x,float *p, float *Ap
     float initial_rTr = reduce(n, r, r);
     printf(">>> Initial residual = %f\n", sqrt(initial_rTr));
     float old_rTr = initial_rTr;
+    update_p<<<(size + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(size, r, p, beta);
+    cudaDeviceSynchronize();
+    float pTp = reduce(n, p, p);
+    printf(">>> pTp = %f\n", pTp);
     for(int i = 0; i < size; i ++){
         dim3 dimBlock(SMALL_BLOCK_SIZE, SMALL_BLOCK_SIZE);
         dim3 dimGrid((n + SMALL_BLOCK_SIZE - 1) / SMALL_BLOCK_SIZE, (n + SMALL_BLOCK_SIZE - 1) / SMALL_BLOCK_SIZE);
@@ -211,7 +216,6 @@ int main() {
             cudaMalloc(&c, size * sizeof(float));
             cudaMemcpy(b, B, size * sizeof(float), cudaMemcpyHostToDevice);
             cudaMemcpy(r, B, size * sizeof(float), cudaMemcpyHostToDevice);
-            cudaMemcpy(p, B, size * sizeof (float), cudaMemcpyHostToDevice);
 
             ADD_TIME(
                     cgSolver(p_size, eps, r, b, x, p, Ap, Ax, c);
